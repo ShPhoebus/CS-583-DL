@@ -152,7 +152,7 @@ input_texts = clean_pairs[:, 0]
 target_texts = ['\t' + text + '\n' for text in clean_pairs[:, 1]]
 
 print('Length of input_texts:  ' + str(input_texts.shape))
-print('Length of target_texts: ' + str(len(target_texts))) # Modified a tiny error in the source code!
+print('Length of target_texts: ' + str(len(target_texts))) # Modified a tiny error in the source code
 
 
 # In[6]:
@@ -292,11 +292,12 @@ print(decoder_input_data.shape)
 #     
 #     -- the final conveyor belt $c_t$
 
-# In[13]:
+# In[14]:
 
 
 from keras.layers import Input, LSTM, Bidirectional, Concatenate
 from keras.models import Model
+from attention import Attention
 
 latent_dim = 256
 
@@ -305,16 +306,19 @@ encoder_inputs = Input(shape=(None, num_encoder_tokens),
                        name='encoder_inputs')
 
 # set the LSTM layer
-encoder_lstm = LSTM(latent_dim, return_state=True, 
-                    dropout=0.5, name='encoder_lstm')
-_, state_h, state_c = encoder_lstm(encoder_inputs)
+# encoder_lstm = LSTM(latent_dim, return_state=True, 
+#                     dropout=0.5, name='encoder_lstm')
+# _, state_h, state_c = encoder_lstm(encoder_inputs)
 
 # set the Bi-LSTM layer
-# encoder_bilstm = Bidirectional(LSTM(latent_dim, return_state=True, 
-#                                   dropout=0.5, name='encoder_lstm'))
-# _, forward_h, forward_c, backward_h, backward_c = encoder_bilstm(encoder_inputs)
-# state_h = Concatenate()([forward_h, backward_h])
-# state_c = Concatenate()([forward_c, backward_c])
+encoder_bilstm = Bidirectional(LSTM(latent_dim, return_state=True, 
+                                  dropout=0.5, name='encoder_lstm'))
+_, forward_h, forward_c, backward_h, backward_c = encoder_bilstm(encoder_inputs)
+state_h = Concatenate()([forward_h, backward_h])
+state_c = Concatenate()([forward_c, backward_c])
+
+# set the Attention
+# _ = Attention()(_)
 
 
 # build the encoder network model
@@ -325,7 +329,7 @@ encoder_model = Model(inputs=encoder_inputs,
 
 # Print a summary and save the encoder network structure to "./encoder.pdf"
 
-# In[14]:
+# In[15]:
 
 
 from IPython.display import SVG
@@ -359,11 +363,13 @@ encoder_model.summary()
 #     
 #     -- the final conveyor belt $c_t$ (discarded in the training and used in the prediction)
 
-# In[15]:
+# In[16]:
 
 
 from keras.layers import Input, LSTM, Dense
 from keras.models import Model
+
+latent_dim = 512
 
 # inputs of the decoder network
 decoder_input_h = Input(shape=(latent_dim,), name='decoder_input_h')
@@ -388,7 +394,7 @@ decoder_model = Model(inputs=[decoder_input_x, decoder_input_h, decoder_input_c]
 
 # Print a summary and save the encoder network structure to "./decoder.pdf"
 
-# In[16]:
+# In[17]:
 
 
 from IPython.display import SVG
@@ -406,7 +412,7 @@ decoder_model.summary()
 
 # ### 3.3. Connect the encoder and decoder
 
-# In[17]:
+# In[18]:
 
 
 # input layers
@@ -423,14 +429,14 @@ model = Model(inputs=[encoder_input_x, decoder_input_x],
               name='model_training')
 
 
-# In[18]:
+# In[19]:
 
 
 print(state_h)
 print(decoder_input_h)
 
 
-# In[19]:
+# In[20]:
 
 
 from IPython.display import SVG
@@ -458,7 +464,7 @@ model.summary()
 # 
 # - stop when the validation loss stop decreasing.
 
-# In[20]:
+# In[21]:
 
 
 print('shape of encoder_input_data' + str(encoder_input_data.shape))
@@ -466,14 +472,14 @@ print('shape of decoder_input_data' + str(decoder_input_data.shape))
 print('shape of decoder_target_data' + str(decoder_target_data.shape))
 
 
-# In[22]:
+# In[23]:
 
 
 model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
 
 model.fit([encoder_input_data, decoder_input_data],  # training data
           decoder_target_data,                       # labels (left shift of the target sequences)
-          batch_size=64, epochs=10, validation_split=0.2)
+          batch_size=64, epochs=30, validation_split=0.2)
 
 model.save('seq2seq.h5')
 
@@ -489,7 +495,7 @@ model.save('seq2seq.h5')
 # 4. sample a char from the predicted probability distribution
 # 5. take the sampled char and the new states as input and repeat the process (stop if reach the [stop] sign "\n").
 
-# In[23]:
+# In[24]:
 
 
 # Reverse-lookup token index to decode sequences back to something readable.
@@ -497,7 +503,7 @@ reverse_input_char_index = dict((i, char) for char, i in input_token_index.items
 reverse_target_char_index = dict((i, char) for char, i in target_token_index.items())
 
 
-# In[24]:
+# In[25]:
 
 
 def decode_sequence(input_seq):
@@ -530,10 +536,10 @@ def decode_sequence(input_seq):
     return decoded_sentence
 
 
-# In[25]:
+# In[40]:
 
 
-for seq_index in range(2100, 2110):
+for seq_index in range(2100, 2120):
     # Take one sequence (part of the training set)
     # for trying out decoding.
     input_seq = encoder_input_data[seq_index: seq_index + 1]
@@ -550,10 +556,10 @@ for seq_index in range(2100, 2110):
 # 2. One-hot encode
 # 3. Translate
 
-# In[28]:
+# In[38]:
 
 
-input_sentence = ['I love you']
+input_sentence = ['I love you ']
 
 def decodeToDutch(input_sentence):
 
@@ -597,7 +603,7 @@ print('translated sentence is: ' + decoded_sentence)
 # 
 # - A reasonable BLEU score should be 0.1 ~ 0.5.
 
-# In[34]:
+# In[39]:
 
 
 from nltk.translate.bleu_score import sentence_bleu
@@ -606,7 +612,7 @@ from nltk.translate.bleu_score import sentence_bleu
 # And test_X,test_y are the test sets calculated in 1.1
 
 # Set the size of the data set to be used. Set a small value here to save time
-numberOfTestSample = 30
+numberOfTestSample = 100
 # the average BLEU score
 scoreAver = 0
 
